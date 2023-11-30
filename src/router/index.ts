@@ -1,12 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import BabylonOne from '@/components/BabylonOne.vue'
+import JiaMi from '@/components/JiaMi.vue'
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(),
   routes: [
     {
       path: '/',
       name: 'home',
       component: BabylonOne
+    },{
+      path:'/jiami',
+      name:'jiami',
+      component:JiaMi
     }
   ]
 })

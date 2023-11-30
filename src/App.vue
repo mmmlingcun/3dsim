@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import BabylonOne from './components/BabylonOne.vue'
+import JiaMi from './components/JiaMi.vue'
 </script>
 
 <template>
+<!--  <JiaMi />-->
   <BabylonOne />
 </template>
 
