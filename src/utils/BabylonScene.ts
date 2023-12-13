@@ -1,25 +1,27 @@
 import {
-  Scene,
+  AnimationGroup,
+  ArcRotateCamera,
+  BoundingInfo,
+  Color3,
+  CubeTexture,
+  DirectionalLight,
   Engine,
   HemisphericLight,
-  MeshBuilder,
-  Vector3,
-  StandardMaterial,
-  Color3,
-  ArcRotateCamera,
-  Animation,
-  CubeTexture,
-  Texture,
   Mesh,
+  MeshBuilder,
+  PositionGizmo,
+  RotationGizmo,
+  ScaleGizmo,
+  Scene,
   SceneLoader,
-  DirectionalLight,
-  Color4,
-  BoundingBoxGizmo, BoundingInfo, UtilityLayerRenderer, PositionGizmo, RotationGizmo, ScaleGizmo, AnimationGroup,
+  StandardMaterial,
+  Texture,
+  Vector3
 } from '@babylonjs/core'
-import { GridMaterial } from '@babylonjs/materials/Grid';
-import "@babylonjs/loaders/glTF";
-import { AdvancedDynamicTexture } from '@babylonjs/gui'
+import { GridMaterial } from '@babylonjs/materials/Grid'
+import '@babylonjs/loaders/glTF'
 import { GLTF2Export } from '@babylonjs/serializers'
+import CryptoJS from 'crypto-js'
 
 export class BabylonScene {
   scene: Scene;
@@ -31,21 +33,57 @@ export class BabylonScene {
   selectModel;
   constructor(private canvas: HTMLCanvasElement) {
     this.engine = new Engine(this.canvas, true);
-    this.scene = this.CreateScene();
-    this.init()
+    this.init();
     this.engine.runRenderLoop(() => {
       this.scene.render();
     });
   }
+
+  /**
+   * 场景初始化
+   */
+  init(){
+    const THIS = this
+    THIS.scene = THIS.CreateScene();
+    THIS.camera = THIS.createCamera();
+    THIS.lights = THIS.createLight();
+    THIS.loadGUI();
+    THIS.loadSykBox();
+    THIS.createGround();
+    // THIS.loadMyModel('/model/钢珠平台场景加密版.glb');
+
+    // 监听双击事件
+    THIS.canvas.addEventListener("dblclick",function(){
+      var pickResult = THIS.scene.pick(THIS.scene.pointerX, THIS.scene.pointerY);
+      console.log(pickResult)
+      THIS.selectModel = THIS.getRootMesh(pickResult.pickedMesh)
+      THIS.showBoundingBox(THIS.selectModel)
+      THIS.adjustModel(THIS.selectModel)
+    })
+  }
+
+  /**
+   * 创建场景
+   * @constructor
+   */
   CreateScene(): Scene {
     const THIS = this
     // 创建场景
     const scene = new Scene(THIS.engine);
     // 开启场景碰撞检测
     scene.collisionsEnabled = true;
+    // 挂载到window上
+    window.myScene = scene
+    return scene;
+  }
 
+  /**
+   * 创建相机
+   */
+  createCamera(){
+    const THIS = this
     // 创建环绕相机，指定名称、位置、目标、场景
-    const Camera = new ArcRotateCamera("ArcRotateCamera", Math.PI/180*45, 0.8*Math.PI/2, 5,new Vector3(0,1,0), this.scene);
+    const Camera = new ArcRotateCamera("ArcRotateCamera", Math.PI/180*45, 0.8*Math.PI/2, 5,new Vector3(0,1,0), THIS.scene);
     // 添加相机操作控件
     Camera.attachControl(THIS.canvas,true);
     // 开启相机碰撞
@@ -55,19 +93,32 @@ export class BabylonScene {
     // 设置相机缩放范围
     Camera.lowerRadiusLimit = 2
     Camera.upperRadiusLimit = 15
+    return Camera
+  }
 
-    // 创建灯光
+  /**
+   * 创建灯光
+   */
+  createLight(){
+    const THIS = this
     // 创建环境光
     const hemisphericLight = new HemisphericLight("HemiLight", new Vector3(0,1,0), THIS.scene);
     // 设置灯光亮度
-    hemisphericLight.intensity = 2;
+    hemisphericLight.intensity = 1.5;
     // 创建平行光
     const directionalLight1 = new DirectionalLight("DirectionalLight", new Vector3(-1, -1, -1), THIS.scene);
-    directionalLight1.intensity = 2;
+    directionalLight1.intensity = 1.5;
+    return [hemisphericLight,directionalLight1]
+  }
 
-    // 天空盒
-    this.skybox = MeshBuilder.CreateBox("skyBox", { size: 100.0 }, scene);
-    const skyboxMaterial = new StandardMaterial("skyBox", scene);
+  /**
+   * 加载天空盒
+   */
+  loadSykBox(){
+    const THIS = this;
+    // 创建天空盒
+    this.skybox = MeshBuilder.CreateBox("skyBox", { size: 100.0 }, THIS.scene);
+    const skyboxMaterial = new StandardMaterial("skyBox", THIS.scene);
     // 关闭背面渲染
     skyboxMaterial.backFaceCulling = false;
     // 关闭光反射
@@ -76,14 +127,20 @@ export class BabylonScene {
     // 天空盒跟随相机位置
     this.skybox.infiniteDistance = true;
     // 天空盒贴图_nx _ny ...
-    skyboxMaterial.reflectionTexture = new CubeTexture("/skybox/skybox", scene);
+    skyboxMaterial.reflectionTexture = new CubeTexture("/skybox/skybox", THIS.scene);
     skyboxMaterial.reflectionTexture.coordinatesMode = Texture.SKYBOX_MODE;
+  }
 
-    //3D Object
-    const ground = MeshBuilder.CreateGround("ground", {width: 20, height:20,sideOrientation:Mesh.DOUBLESIDE}, this.scene);
+  /**
+   * 创建地板
+   */
+  createGround(){
+    const THIS = this
+    // 创建地板
+    const ground = MeshBuilder.CreateGround("ground", {width: 20, height:20,sideOrientation:Mesh.DOUBLESIDE}, THIS.scene);
     ground.checkCollisions = true
     // 创建网格材质
-    var groundMaterial = new GridMaterial("groundMaterial", scene);
+    var groundMaterial = new GridMaterial("groundMaterial", THIS.scene);
     // 间隔颜色
     groundMaterial.mainColor = new Color3(0.7,0.7,0.7)
     // 线颜色
@@ -99,28 +156,7 @@ export class BabylonScene {
     // 避免相交点过亮
     groundMaterial.useMaxLine = true;
     ground.material = groundMaterial
-
-    // 加载模型，返回场景
-    SceneLoader.Append("/model/","钢珠平台动画版.glb",THIS.scene,function(scene){
-      const rootNode = scene.getMeshById("__root__")
-      rootNode.id = "钢珠平台"
-      rootNode.rotation = new Vector3(90*Math.PI/180,0,0)
-      console.log("加载",scene)
-    })
-
-
-    // 监听双击事件
-    THIS.canvas.addEventListener("dblclick",function(){
-      var pickResult = scene.pick(scene.pointerX, scene.pointerY);
-      console.log(pickResult)
-      THIS.selectModel = THIS.getRootMesh(pickResult.pickedMesh)
-      THIS.showBoundingBox(THIS.selectModel)
-      THIS.adjustModel(THIS.selectModel)
-    })
-    // 挂载到window上
-    window.myScene = scene
-
-    return scene;
+    ground.id = "ground"
   }
 
   /**
@@ -180,29 +216,172 @@ export class BabylonScene {
         case 'r':THIS.gizmo = THIS.gizmoR;break;
         case 's':THIS.gizmo = THIS.gizmoS;break;
         case 'a':THIS.playAnimation(THIS.selectModel);return;
-        case 'd':THIS.exportModel("钢珠平台动画版");return;
+        case 'd':THIS.exportModel2GLB("钢珠平台场景");return;
         default:return;
       }
       THIS.gizmo.attachedMesh = model;
     }
   }
-  exportModel(modelName){
-    console.log(this.scene)
+
+  /**
+   * 导出glb模型
+   * @param modelName
+   */
+  exportModel2GLB(modelName){
+    const THIS = this;
+    // 导出选项:剔除天空盒和网格地板
     let options = {
       shouldExportNode(node){
-        return node.id !== "skyBox"
+        return node.id !== "skyBox" && node.id!=="ground"
       }
     }
-    GLTF2Export.GLBAsync(this.scene,"钢珠平台场景",options).then((glb)=>{
-      console.log(glb.toString())
-      glb.downloadFiles()
+    // 导出成GLBData
+    GLTF2Export.GLBAsync(THIS.scene,"钢珠平台场景",options).then((glb)=>{
+      // 加密并下载模型
+      THIS.downloadMyModel(glb)
     })
   }
 
   /**
-   * 初始化
+   * 加密blob
+   * @param blob
    */
-  async init() {
+  encryptMyModel(blob){
+    var resultBlob;
+    // 把blob转成arrayBuffer,进行加密
+    var reader = new FileReader()
+    reader.onload = function() {
+      // blob转arrayBuffer
+      var arrayBuffer = this.result;
+      // arrayBuffer转wordArray
+      var wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+      // 内容加密
+      wordArray = CryptoJS.AES.encrypt(wordArray, 'secret key 123');
+      // arrayBuffer转Blob
+      resultBlob = new Blob([wordArray.toString()])
+    }
+    reader.readAsArrayBuffer(blob)
+  }
+
+  /**
+   * 加密模型并下载文件
+   * @param GLBData
+   */
+  downloadMyModel(GLBData){
+    for (const key in GLBData.glTFFiles) {
+      // 文件内容
+      const blob = GLBData.glTFFiles[key];
+      // 把blob转成arrayBuffer,进行加密
+      var reader = new FileReader()
+      reader.onload = function() {
+        // blob转arrayBuffer
+        var arrayBuffer = this.result;
+        // arrayBuffer转wordArray
+        var wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+        // 内容加密
+        wordArray = CryptoJS.AES.encrypt(wordArray, 'secret key 123');
+        // arrayBuffer转Blob
+        var blob = new Blob([wordArray.toString()])
+
+        // 使用a标签下载文件
+        const link = document.createElement("a");
+        document.body.appendChild(link);
+        // 隐藏显示
+        link.setAttribute("type", "hidden");
+        // 文件名称
+        link.download = key.replace("glb","mmm");
+        let mimeType;
+        mimeType = { type: "text/plain" };
+        link.href = window.URL.createObjectURL(new Blob([blob], mimeType));
+        link.click();
+      }
+      reader.readAsArrayBuffer(blob)
+    }
+  }
+
+  /**
+   * 通过url加载加密的模型
+   * @param url
+   */
+  loadMyModel(url){
+    const THIS = this
+    let modelName = url.slice(url.lastIndexOf("/")+1)
+    // 创建一个新的XMLHttpRequest对象
+    let xhr = new XMLHttpRequest();
+    // 配置请求，第一个参数是请求类型，第二个参数是文件路径
+    xhr.open('GET', url, true);
+    // 设置响应类型为文本
+    xhr.responseType = 'text';
+    // 注册一个事件处理程序，当请求完成时触发
+    xhr.onload = function() {
+      // 检查请求的状态
+      if (xhr.status === 200) {
+        // 请求成功，可以访问响应文本
+        let context  = xhr.response;
+
+        // 模型文件内容解密
+        let file = THIS.decryptMyModel(context,modelName)
+
+        // 加载模型到场景
+        SceneLoader.Append("", file, THIS.scene, function (loadedScene) {
+          const rootNode = scene.getMeshById("__root__")
+          rootNode.id = modelName.slice(0,modelName.lastIndexOf("."))
+          // rootNode.rotation = new Vector3(90*Math.PI/180,0,0)
+          console.log("加载",scene)
+        })
+      } else {
+        // 请求失败，处理错误
+        console.error('Failed to load gltf file. Status: ' + xhr.status);
+      }
+    };
+    // 注册一个事件处理程序，当请求出错时触发
+    xhr.onerror = function() {
+      console.error('Network error occurred while trying to fetch the gltf file.');
+    };
+    // 发送请求
+    xhr.send();
+  }
+
+  /**
+   * txt文本解密成file
+   * @param context
+   * @param modelName
+   */
+  decryptMyModel(context,modelName){
+    // 内容解密
+    let wordArray = CryptoJS.AES.decrypt(context, 'secret key 123');
+    // wordBuffer转arrayBuffer
+    let decryptedBuffer = new Uint8Array(wordArray.words.length * 4);
+    for (let i = 0; i < wordArray.words.length; i++) {
+      let word = wordArray.words[i];
+      decryptedBuffer[i * 4] = (word >>> 24) & 0xff;
+      decryptedBuffer[i * 4 + 1] = (word >>> 16) & 0xff;
+      decryptedBuffer[i * 4 + 2] = (word >>> 8) & 0xff;
+      decryptedBuffer[i * 4 + 3] = word & 0xff;
+    }
+    // arrayBuffer转File
+    return new File([decryptedBuffer],modelName.replace("mmm","glb"))
+  }
+
+  /**
+   * file加载到场景
+   * @param file
+   * @param modelName
+   */
+  loadModel2Scene(file,modelName){
+    const THIS = this
+    // 加载模型到场景
+    SceneLoader.Append("", file, THIS.scene, function (loadedScene) {
+      const rootNode = scene.getMeshById("__root__")
+      rootNode.id = modelName.slice(0,modelName.lastIndexOf("."))
+      console.log("加载完成",THIS.scene)
+    })
+  }
+
+  /**
+   * 初始化控件
+   */
+  async loadGUI() {
     const THIS = this;
     THIS.gizmoP = new PositionGizmo();
     THIS.gizmoR = new RotationGizmo();
@@ -271,5 +450,10 @@ export class BabylonScene {
     }
     console.log(animationGroup1)
     animationGroup1.start(false,1,animationGroup1.from,animationGroup1.to,false)
+  }
+
+  createMyUI(){
+    var container = document.getElementById("myBabylon")
+    var myButton = ""
   }
 }

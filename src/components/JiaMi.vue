@@ -42,49 +42,45 @@
 </template>
 
 <script>
-import forge from 'node-forge'
+import CryptoJS from 'crypto-js'
 export default {
   name: 'JiaMi',
   methods:{
     jiaMi(){
-      var keyStr = forge.random.getBytesSync(16) // 生成随机iv 12字节
-      this.key = keyStr
-      document.getElementById("password1").value = forge.util.encode64(keyStr);
-      var content = document.getElementById("content1").value
-      var result = this.encrypt(keyStr,content)
-      document.getElementById("content").value = result
+      // Encrypt
+      var ciphertext = CryptoJS.AES.encrypt('my content', 'secret key 123').toString();
+
+      // Decrypt
+      var bytes  = CryptoJS.AES.decrypt(ciphertext, 'secret key 123');
+      var originalText = bytes.toString(CryptoJS.enc.Utf8);
+
+      console.log(originalText); // 'my message'
+
+      var context1 = document.getElementById("content1").value
+      var password = document.getElementById("password1").value
+
+      // Encrypt
+      var ciphertext = CryptoJS.AES.encrypt(context1,password).toString();
+
+      document.getElementById("content").value = ciphertext
+      document.getElementById("password2").value = password
+
     },
     jieMi(){
-      var keyStr = document.getElementById("password1").value
-      document.getElementById("password2").value = keyStr
       var content = document.getElementById("content").value
-      var result = this.decrypt(keyStr,content)
-      document.getElementById("content2").value = result
+      var password2 = document.getElementById("password2").value
+
+      // Decrypt
+      var bytes  = CryptoJS.AES.decrypt(content, password2);
+      var originalText = bytes.toString(CryptoJS.enc.Utf8);
+
+      document.getElementById("content2").value = originalText
     },
     encrypt(key,word) {
-      var iv = forge.random.getBytesSync(16) // 生成随机iv 12字节
-      var cipher = forge.cipher.createCipher('AES-CBC', key) // 生成AES-GCM模式的cipher对象 并传入密钥
-      cipher.start({
-        iv: iv
-      })
-      cipher.update(forge.util.createBuffer(forge.util.encodeUtf8(word)))
-      cipher.finish()
-      var encrypted = cipher.output
-      this.iv = iv
-      this.encrypted = encrypted
-      console.log(this)
-      return forge.util.encode64(encrypted.getBytes())
+
     },
     decrypt(key,word) {
-      var key = this.key
-      var iv = this.iv
-      var encrypted = this.encrypted
-      var decipher = forge.cipher.createDecipher('AES-CBC', key);
-      decipher.start({iv: iv});
-      decipher.update(encrypted);
-      var result = decipher.finish(); // check 'result' for true/false
-      var decrypted = decipher.output
-      return forge.util.encode64(decrypted.getBytes());
+
     }
   }
 }
